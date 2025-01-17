@@ -38,15 +38,15 @@ def add_user(user: User):
     if existing:
         raise HTTPException(status_code=400, detail="Пользователь с таким username уже существует")
     
-    user_data = User(created_on=datetime.now(),
-                     username=user.username,
-                     fullName=user.fullName,
-                     active=user.active,
-                     email=user.email,
-                     friends=[],
-                     friends_count=0)
+    # user_data = User(created_on=datetime.now(),
+    #                  username=user.username,
+    #                  fullName=user.fullName,
+    #                  active=user.active,
+    #                  email=user.email,
+    #                  friends=[],
+    #                  friends_count=0)
     
-    users_collection.insert_one(user_data.model_dump())
+    users_collection.insert_one(user.model_dump())
 
     return {"message": "Пользователь успешно добавлен"}
 
@@ -57,15 +57,15 @@ def add_post(post: Post):
     if not existing:
         raise HTTPException(status_code=400, detail="Пользователь не найден")
     
-    post_data = Post(date = datetime.now(),
-                     username = post.username,
-                     content = post.content,
-                     likes = post.likes,
-                     comment_count = post.comment_count)
+    # post_data = Post(date = datetime.now(),
+    #                  username = post.username,
+    #                  content = post.content,
+    #                  likes = post.likes,
+    #                  comment_count = post.comment_count)
     
-    posts_collection.insert_one(post_data.model_dump())
+    posts_collection.insert_one(post.model_dump())
 
-    return {"message": "Запись успешно добавлен"}
+    return {"message": "Запись успешно добавлена"}
 
 # Найти всех пользователей
 @app.get("/users", response_model=List[User])
@@ -100,7 +100,7 @@ def get_posts_by_username(username: str):
 # Найти посты с более чем 50 лайками
 @app.get("/trending", response_model=List[Post])
 def get_trending_posts():
-    posts = posts_collection.find({"likes": {"gt": 50}})
+    posts = posts_collection.find({"likes": {"$gt": 50}})
     return [Post(**post) for post in posts]
 
 # Обновить email-адрес пользователя по имени пользователя
