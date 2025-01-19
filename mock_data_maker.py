@@ -1,6 +1,7 @@
 from random import choice, randint
 from main import User, Post
 from datetime import datetime
+from tqdm import tqdm
 
 import lorem
 import requests
@@ -70,7 +71,7 @@ def upload_to_db(DB_address,
     with requests.Session() as sess:
         headers = {'content-type': 'application/json'}
         if users:
-            for user in users:
+            for user in tqdm(users, desc = "Adding users:"):
                 try:
                     sess.post(url = f'{DB_address}/users',
                               headers = headers,
@@ -85,7 +86,7 @@ def upload_to_db(DB_address,
                     pass
 
         if posts:
-            for post in posts:
+            for post in tqdm(posts, desc = 'Adding posts:'):
                 try:
                     sess.post(url = f'{DB_address}/posts',
                               headers = headers,

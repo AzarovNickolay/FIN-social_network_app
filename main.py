@@ -82,7 +82,7 @@ def get_users_by_username(username: str):
 # Найти пользователей с более чем 100 друзьями
 @app.get("/popusers", response_model=List[User])
 def get_popular_users():
-    users = users_collection.find({"friends_count": {"gt": 100}})
+    users = users_collection.find({"friends_count": {"$gt": 100}})
     return [User(**user) for user in users]
 
 # Подсчитать количество пользователей в сети 
@@ -161,21 +161,20 @@ def delete_user(username: str):
     return {"message": f"Пользователь {username} удален успешно"}
 
 # Найти пользователей, зарегистрированных после определенной даты
-@app.get("/users/find_by_date")
-def find_by_date(date: datetime):
+@app.get("/users/find/by_date")
+def find_by_date(date: str):
     try:
-        users = users_collection.find({"registration_date": {"$gt": date}})
-        users_list = [{"username": user["username"],
-                       "email": user["email"],
-                       "registration_date": user["registration_date"]} 
-                    for user in users]
-        return {"users": users_list}
+        date_obj = datetime.fromisoformat(date)
+
+        users = users_collection.find({"created_on": {"$gt": date_obj}})
+        
+        return [User(**user) for user in users]
     
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
     
 # Найти посты, содержащие конкретное слово (по заданию - "Встреча")
-@app.get("/posts/{keyword}")
+@app.get("/posts/search/{keyword}")
 def search_posts_by_keyword(keyword: str):
     try:
         posts = posts_collection.find({"content": {"$regex": keyword, "$options": "i"}})
@@ -193,7 +192,7 @@ def search_posts_by_keyword(keyword: str):
     
 # Найти пользователей, у которых есть общие друзья с заданным пользователем
 @app.get("/users/{username}/mutual_friends")
-def fetch_mutual_friends(username: str, current_user: str):
+def fetch_users_with_mutual_friends(username: str):
     try:
         # Получаем друзей заданного пользователя
         user = users_collection.find_one({"username": username})
@@ -201,22 +200,19 @@ def fetch_mutual_friends(username: str, current_user: str):
             raise HTTPException(status_code=404, detail='Пользователь не найден')
         user_friends = set(user.get("friends", []))
         
-        # Получаем друзей текущего пользователя
-        current_user_data = users_collection.find_one({"username": current_user})
-        if not current_user_data:
-            raise HTTPException(status_code=404, detail='Текущий пользователь не найден')
-        current_user_friends = set(current_user_data.get("friends", []))
+        # Находим всех пользователей, у которых есть хотя бы один общий друг с заданным пользователем
+        users_with_mutual_friends = users_collection.distinct("username", {"friends": {"$in": list(user_friends)}})
         
-        # Находим общих друзей
-        mutual_friends = user_friends.intersection(current_user_friends)
+        # Исключаем текущего из результата
+        result = [other_user for other_user in users_with_mutual_friends if other_user != username]
         
-        return {"mutual_friends": list(mutual_friends)}
+        return {"users_with_mutual_friends": result}
     
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
 # Найти посты с определенным количеством лайков и комментариев   
-@app.get("/posts/by_likes_comments")
+@app.get("/posts/search/by_likes_comments")
 def find_post_by_likes_comments(likes: int = None, comment_count: int = None): 
     try:
         if not likes and not comment_count:
@@ -230,35 +226,21 @@ def find_post_by_likes_comments(likes: int = None, comment_count: int = None):
 
         qualified_posts = posts_collection.find(query)
 
-        res = [{"content": post["content"],
-                 "username": post["username"],
-                 "date": post["date"],
-                 "likes": post["likes"],
-                 "comment_count": post["comment_count"]} 
-                 
-                 for post in qualified_posts]
-
-        if not res:
-            return {"message": "Не найдено постов, соответствующих условиям поиска", "posts": []}
-        
-        return {"posts": res}
+        return [Post(**post) for post in qualified_posts]
 
 
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
     
 # Найти пользователей с определенным доменом электронной почты
-@app.get("/users/by_email_domain", response_model=List[User])
+@app.get("/users/search/by_email_domain", response_model=List[User])
 def find_users_by_email_domain(domain: str):
     try:
         if not domain:
             raise HTTPException(status_code=400, detail="Домен не передан")
         
-        users = users_collection.find({"email": {"$regex": f"@{domain}$"}})
+        users = users_collection.find({"email": {"$regex": f"{domain}", "$options": "i"}})
         result = [User(**user) for user in users]
-        
-        if not result:
-            return {"message": "Не найдено пользователей с указанным доменом электронной почты", "users": []}
         
         return result
 
@@ -266,7 +248,7 @@ def find_users_by_email_domain(domain: str):
         raise HTTPException(status_code=500, detail=str(exc))
     
 # Подсчитать количество постов каждого пользователя
-@app.get("/users/total_posts")
+@app.get("/users/stats/total_posts")
 def count_posts_by_user():
     try:
         agg = [
@@ -275,9 +257,6 @@ def count_posts_by_user():
         result = posts_collection.aggregate(agg)
         response = [{"username": item["_id"], 
                      "total_posts": item["total_posts"]} for item in result]
-        
-        if not response:
-            return {"message": "Не найдено постов", "users": []}
         
         return {"users": response}
     
